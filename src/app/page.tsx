@@ -3,6 +3,9 @@ import { useEffect, useState } from 'react';
 import { createBrowserClient } from './supabase/client';
 import { useAuth } from '../contexts/AuthContext';
 import AddBusinessForm from '../components/AddBusinessForm';
+import EditBusinessForm from '../components/EditBusinessForm';
+import DeleteBusinessModal from '../components/DeleteBusinessModal';
+import ViewBusinessDetailsModal from '../components/ViewBusinessDetailsModal';
 import AuthForm from '../components/AuthForm';
 
 type Biz = { 
@@ -19,6 +22,9 @@ export default function Page() {
   const supabase = createBrowserClient();
   const [biz, setBiz] = useState<Biz[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editingBusiness, setEditingBusiness] = useState<Biz | null>(null);
+  const [deletingBusiness, setDeletingBusiness] = useState<Biz | null>(null);
+  const [viewingBusiness, setViewingBusiness] = useState<Biz | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -39,11 +45,30 @@ export default function Page() {
 
     // Set up realtime subscription
     const channel = supabase
-      .channel('biz-rt')
+      .channel('db')
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'businesses' },
-        (payload) => setBiz(prev => [payload.new as Biz, ...prev])
+        (payload) => {
+          console.log('New business added:', payload.new);
+          setBiz(prev => [payload.new as Biz, ...prev]);
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'businesses' },
+        (payload) => {
+          console.log('Business updated:', payload.new);
+          setBiz(prev => prev.map(b => b.id === payload.new.id ? payload.new as Biz : b));
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'businesses' },
+        (payload) => {
+          console.log('Business deleted:', payload.old);
+          setBiz(prev => prev.filter(b => b.id !== payload.old.id));
+        }
       )
       .subscribe();
 
@@ -51,6 +76,16 @@ export default function Page() {
       supabase.removeChannel(channel);
     };
   }, [user, supabase]);
+
+  const handleBusinessUpdated = (updatedBusiness: Biz) => {
+    setBiz(prev => prev.map(b => b.id === updatedBusiness.id ? updatedBusiness : b));
+    setEditingBusiness(null);
+  };
+
+  const handleBusinessDeleted = (businessId: string) => {
+    setBiz(prev => prev.filter(b => b.id !== businessId));
+    setDeletingBusiness(null);
+  };
 
   if (authLoading) {
     return (
@@ -117,12 +152,13 @@ export default function Page() {
                   <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>Category</th>
                   <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>City</th>
                   <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>Created</th>
+                  <th style={{ padding: '1rem', textAlign: 'left', borderBottom: '1px solid #ddd' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {biz.length === 0 ? (
                   <tr>
-                    <td colSpan={4} style={{ padding: '2rem', textAlign: 'center', color: '#666' }}>
+                    <td colSpan={5} style={{ padding: '2rem', textAlign: 'center', color: '#666' }}>
                       No businesses found. Be the first to add one!
                     </td>
                   </tr>
@@ -145,6 +181,56 @@ export default function Page() {
                       <td style={{ padding: '1rem', color: '#666', fontSize: '0.875rem' }}>
                         {new Date(b.created_at).toLocaleString()}
                       </td>
+                      <td style={{ padding: '1rem' }}>
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <button
+                            onClick={() => setViewingBusiness(b)}
+                            style={{
+                              padding: '0.25rem 0.5rem',
+                              backgroundColor: '#007bff',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '0.875rem'
+                            }}
+                          >
+                            View Details
+                          </button>
+                          {user && user.id === b.owner && (
+                            <>
+                              <button
+                                onClick={() => setEditingBusiness(b)}
+                                style={{
+                                  padding: '0.25rem 0.5rem',
+                                  backgroundColor: '#ffc107',
+                                  color: '#000',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  fontSize: '0.875rem'
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => setDeletingBusiness(b)}
+                                style={{
+                                  padding: '0.25rem 0.5rem',
+                                  backgroundColor: '#dc3545',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  fontSize: '0.875rem'
+                                }}
+                              >
+                                Delete
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -153,6 +239,32 @@ export default function Page() {
           </div>
         )}
       </div>
+
+      {/* Edit Business Modal */}
+      {editingBusiness && (
+        <EditBusinessForm
+          business={editingBusiness}
+          onUpdated={handleBusinessUpdated}
+          onCancel={() => setEditingBusiness(null)}
+        />
+      )}
+
+      {/* Delete Business Modal */}
+      {deletingBusiness && (
+        <DeleteBusinessModal
+          business={deletingBusiness}
+          onDeleted={handleBusinessDeleted}
+          onCancel={() => setDeletingBusiness(null)}
+        />
+      )}
+
+      {/* View Business Details Modal */}
+      {viewingBusiness && (
+        <ViewBusinessDetailsModal
+          business={viewingBusiness}
+          onClose={() => setViewingBusiness(null)}
+        />
+      )}
     </div>
   );
 }

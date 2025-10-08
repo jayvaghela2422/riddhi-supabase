@@ -13,6 +13,8 @@ export function createBrowserClient(): SupabaseClient<Database>{
         persistSession: true,
         // Use a stable storage key to avoid collisions across multiple clients
         storageKey: 'gsb-supabase-auth',
+        // Set redirect URL to the deployed app URL
+        redirectTo: process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : undefined),
       },
     }
   );
