@@ -1,9 +1,9 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 import type { Database } from '../../types/supabase';
 
-let browserClient: SupabaseClient<Database> | null = null;
+let browserClient: ReturnType<typeof createClient<Database>> | null = null;
 
-export function createBrowserClient(): SupabaseClient<Database>{
+export function createBrowserClient() {
   if (browserClient) return browserClient;
   browserClient = createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,8 +13,6 @@ export function createBrowserClient(): SupabaseClient<Database>{
         persistSession: true,
         // Use a stable storage key to avoid collisions across multiple clients
         storageKey: 'gsb-supabase-auth',
-        // Set redirect URL to the deployed app URL
-        redirectTo: process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : undefined),
       },
     }
   );
